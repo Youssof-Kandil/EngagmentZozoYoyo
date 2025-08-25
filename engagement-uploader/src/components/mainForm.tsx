@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import HeartLoader from "./heartloader";
 import toast from "react-hot-toast";
 
-const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string; // https://...run.app/upload
+const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string; 
 
 type Item = { id: string; file: File; url: string };
 
@@ -103,7 +103,7 @@ export default function UploadForm() {
   }, []);
 
   // Sends one batch via FormData (no Base64)
-  async function uploadBatchFormData(batch: Item[], subfolderName: string/*, signal?: AbortSignal*/) {
+  async function uploadBatchFormData(batch: Item[], subfolderName: string) {
     const fd = new FormData();
     if (subfolderName.trim()) fd.append("subfolderName", subfolderName.trim());
     for (const it of batch) fd.append("files", it.file, it.file.name);
@@ -111,12 +111,8 @@ export default function UploadForm() {
     const data = await fetchJSON(UPLOAD_ENDPOINT, {
       method: "POST",
       body: fd,
-      // signal,  // ⭐ removed to avoid AbortError races
       retries: 1,
     });
-
-    // ⭐ Log the server response for this batch (useful while debugging)
-    // console.log("Batch uploaded:", data);
 
     if (!data?.ok) throw new Error(data?.error || "Upload failed");
     return data;
@@ -148,7 +144,6 @@ export default function UploadForm() {
     setProgress({ done: 0, total: all.length });
     let uploaded = 0;
 
-    // ⭐ removed AbortController; it’s not needed and can cause false errors at the end
     try {
       for (const batch of batches) {
         await uploadBatchFormData(batch, subfolderName);
@@ -178,8 +173,7 @@ export default function UploadForm() {
       setSuccess(true);
       setName("");
       clearAll();
-      // ⭐ optional UX: toast.success
-      // toast.success(t("uploadComplete") || "Upload complete");
+
     } catch (err: any) {
       console.error("[UPLOAD ERROR]", err);
       toast.error(err?.message || "Upload failed. Please try again.");
