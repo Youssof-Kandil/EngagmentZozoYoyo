@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import HeartLoader from "./components/heartloader";
 import Hero from "./components/heroImage";
 import UploadForm from "./components/mainForm";
+import { Toaster } from "react-hot-toast";
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -54,7 +55,7 @@ export default function App() {
           {t("footer")}
         </footer>
       </div>
-
+      <Toaster />
     </div>
   );
 }
