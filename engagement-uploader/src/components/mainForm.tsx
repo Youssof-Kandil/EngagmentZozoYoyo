@@ -34,7 +34,7 @@ async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries
     } catch (err: any) {
       lastErr = err;
       if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+        await new Promise(r => setTimeout(r, 150 * (attempt + 1)));
         continue;
       }
       throw lastErr;
@@ -113,7 +113,6 @@ export default function UploadForm() {
       body: fd,
       retries: 1,
     });
-
     if (!data?.ok) throw new Error(data?.error || "Upload failed");
     return data;
   }
@@ -121,7 +120,7 @@ export default function UploadForm() {
   // Size-aware batching
   async function uploadFormDataBatched(all: Item[], subfolderName: string) {
     const MAX_BATCH_BYTES = 30 * 1024 * 1024;
-    const MAX_BATCH_COUNT = 8;
+    const MAX_BATCH_COUNT = 3;
 
     const batches: Item[][] = [];
     let cur: Item[] = [];
