@@ -1,0 +1,17 @@
+/* Tailwind CSS imports */@import "tailwindcss";
+/* Base look */
+:root {
+  --rose: #b2455f;
+  --rose-soft: #d97a90;
+  --off: #fbf8f6;
+  --ink: #2b2b2b;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  background: var(--off);
+}
