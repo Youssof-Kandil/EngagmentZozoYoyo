@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import HeartLoader from "./heartloader";
 import toast from "react-hot-toast";
 
-const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string; 
+const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string;
 
 type Item = { id: string; file: File; url: string };
 
@@ -241,6 +241,7 @@ export default function UploadForm() {
               type="file"
               accept="image/*"
               multiple
+              max={20}
               className="sr-only"
               onChange={onFiles}
             />

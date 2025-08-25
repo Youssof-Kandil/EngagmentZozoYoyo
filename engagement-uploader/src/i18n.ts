@@ -29,6 +29,7 @@ const resources = {
       remove: "حذف",
       clearAll: "حذف الكل",
       loading: "جاري التحميل",
+      imagesSelected_ar: "تم اختيار",
     },
   },
   en: {
@@ -57,6 +58,7 @@ const resources = {
       remove: "Remove",
       clearAll: "Clear all",
       loading: "Loading",
+      imagesSelected_en: "images Selected",
     },
   },
 };
@@ -66,8 +68,8 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    fallbackLng: "ar",
-    lng: "ar", // default Arabic
+    fallbackLng: "en",
+    lng: "en", // default Arabic
     interpolation: { escapeValue: false },
     detection: { order: ["querystring"], caches: [] }, // keep simple
   });
