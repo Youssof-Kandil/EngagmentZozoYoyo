@@ -17,7 +17,6 @@ function uuidv4() {
 
 async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries?: number } = {}) {
   const { retries = 2, ...opts } = init;
-  let lastErr: any;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(input, opts);
@@ -32,7 +31,6 @@ async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries
       // if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       return data;
     } catch (err: any) {
-      lastErr = err;
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, 150 * (attempt + 1)));
         continue;
