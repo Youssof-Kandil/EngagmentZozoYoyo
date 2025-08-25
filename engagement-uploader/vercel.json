@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/((?!assets/|favicon\\.ico|robots\\.txt|.*\\.[\\w]+$).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [{ "source": "/qr", "destination": "/", "permanent": true }]
+}
