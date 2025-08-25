@@ -49,7 +49,7 @@ export default function UploadForm() {
   const [items, setItems] = useState<Item[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const lang = i18n.resolvedLanguage || i18n.language || "ar";
 
@@ -103,57 +103,57 @@ export default function UploadForm() {
   }, []);
 
   // Sends one batch via FormData (no Base64)
-  async function uploadBatchFormData(batch: Item[], subfolderName: string) {
-    const fd = new FormData();
-    if (subfolderName.trim()) fd.append("subfolderName", subfolderName.trim());
-    for (const it of batch) fd.append("files", it.file, it.file.name);
+  // async function uploadBatchFormData(batch: Item[], subfolderName: string) {
+  //   const fd = new FormData();
+  //   if (subfolderName.trim()) fd.append("subfolderName", subfolderName.trim());
+  //   for (const it of batch) fd.append("files", it.file, it.file.name);
 
-    const data = await fetchJSON(UPLOAD_ENDPOINT, {
-      method: "POST",
-      body: fd,
-      retries: 1,
-    });
-    if (!data?.ok) throw new Error(data?.error || "Upload failed");
-    return data;
-  }
+  //   const data = await fetchJSON(UPLOAD_ENDPOINT, {
+  //     method: "POST",
+  //     body: fd,
+  //     retries: 1,
+  //   });
+  //   if (!data?.ok) throw new Error(data?.error || "Upload failed");
+  //   return data;
+  // }
 
   // Size-aware batching
-  async function uploadFormDataBatched(all: Item[], subfolderName: string) {
-    const MAX_BATCH_BYTES = 30 * 1024 * 1024;
-    const MAX_BATCH_COUNT = 3;
+  // async function uploadFormDataBatched(all: Item[], subfolderName: string) {
+  //   const MAX_BATCH_BYTES = 30 * 1024 * 1024;
+  //   const MAX_BATCH_COUNT = 3;
 
-    const batches: Item[][] = [];
-    let cur: Item[] = [];
-    let curSize = 0;
+  //   const batches: Item[][] = [];
+  //   let cur: Item[] = [];
+  //   let curSize = 0;
 
-    for (const it of all) {
-      const fitsByCount = cur.length < MAX_BATCH_COUNT;
-      const fitsBySize = curSize + it.file.size <= MAX_BATCH_BYTES;
-      if (fitsByCount && fitsBySize) {
-        cur.push(it);
-        curSize += it.file.size;
-      } else {
-        if (cur.length) batches.push(cur);
-        cur = [it];
-        curSize = it.file.size;
-      }
-    }
-    if (cur.length) batches.push(cur);
+  //   for (const it of all) {
+  //     const fitsByCount = cur.length < MAX_BATCH_COUNT;
+  //     const fitsBySize = curSize + it.file.size <= MAX_BATCH_BYTES;
+  //     if (fitsByCount && fitsBySize) {
+  //       cur.push(it);
+  //       curSize += it.file.size;
+  //     } else {
+  //       if (cur.length) batches.push(cur);
+  //       cur = [it];
+  //       curSize = it.file.size;
+  //     }
+  //   }
+  //   if (cur.length) batches.push(cur);
 
-    setProgress({ done: 0, total: all.length });
-    let uploaded = 0;
+  //   setProgress({ done: 0, total: all.length });
+  //   let uploaded = 0;
 
-    try {
-      for (const batch of batches) {
-        await uploadBatchFormData(batch, subfolderName);
-        uploaded += batch.length;
-        setProgress({ done: uploaded, total: all.length });
-        await new Promise(r => setTimeout(r, 0));
-      }
-    } finally {
-      setProgress(null);
-    }
-  }
+  //   try {
+  //     for (const batch of batches) {
+  //       await uploadBatchFormData(batch, subfolderName);
+  //       uploaded += batch.length;
+  //       setProgress({ done: uploaded, total: all.length });
+  //       await new Promise(r => setTimeout(r, 0));
+  //     }
+  //   } finally {
+  //     setProgress(null);
+  //   }
+  // }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,10 +165,19 @@ export default function UploadForm() {
       toast.error("Upload endpoint not configured. Check VITE_WEB_APP_URL.");
       return;
     }
-
+    const form = new FormData();
     setSubmitting(true);
     try {
-      await uploadFormDataBatched(items, name);
+      form.append("subfolderName", name.trim());
+      for (const item of items) {
+        form.append("files", item.file, item.file.name);
+      }
+      const data = await fetchJSON(UPLOAD_ENDPOINT, {
+        method: "POST",
+        body: form,
+        retries: 1,
+      });
+      if (!data?.ok) throw new Error(data?.error || "Upload failed");
       setSuccess(true);
       setName("");
       clearAll();
@@ -286,7 +295,7 @@ export default function UploadForm() {
           style={{ background: "var(--rose)" }}
           disabled={submitting}
         >
-          {progress ? `${t("uploading") || "Uploading"} ${progress.done}/${progress.total}` : t("submit")}
+          {t("submit")}
         </button>
 
         <HeartLoader visible={submitting} />
