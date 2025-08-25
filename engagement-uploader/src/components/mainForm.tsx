@@ -3,13 +3,9 @@ import { useTranslation } from "react-i18next";
 import HeartLoader from "./heartloader";
 import toast from "react-hot-toast";
 
-const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string; // e.g. https://...run.app/upload
+const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string; // https://...run.app/upload
 
-type Item = {
-  id: string;
-  file: File;
-  url: string; // Object URL for stable preview
-};
+type Item = { id: string; file: File; url: string };
 
 function uuidv4() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
@@ -19,9 +15,6 @@ function uuidv4() {
   });
 }
 
-/**
- * Smart fetch with JSON parsing & retries
- */
 async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries?: number } = {}) {
   const { retries = 2, ...opts } = init;
   let lastErr: any;
@@ -33,14 +26,14 @@ async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
-        throw new Error(`Invalid JSON response (${res.status})`);
+        // ⭐ include body in error to see what came back
+        throw new Error(`Invalid JSON response (${res.status}): ${text?.slice(0, 200)}`);
       }
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       return data;
     } catch (err: any) {
       lastErr = err;
       if (attempt < retries) {
-        // small backoff
         await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
         continue;
       }
@@ -60,34 +53,24 @@ export default function UploadForm() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const lang = i18n.resolvedLanguage || i18n.language || "ar";
 
-  // ---------- file selection & previews ----------
-  const appendFiles = useCallback(
-    (incoming: File[]) => {
-      if (!incoming.length) return;
-
-      setItems(prev => {
-        const next = [...prev];
-        for (const f of incoming) {
-          if (!f.type.startsWith("image/")) continue;
-
-          // Guardrails (adjust to your needs)
-          const MAX_EACH_MB = 25; // FormData handles large files fine; keep generous but safe for mobile
-          if (f.size > MAX_EACH_MB * 1024 * 1024) {
-            toast.error(`${f.name}: ${t("fileTooLarge") || "file too large"}`);
-            continue;
-          }
-
-          const id = `${f.name}-${f.size}-${f.lastModified}-${uuidv4()}`;
-          next.push({ id, file: f, url: URL.createObjectURL(f) });
+  const appendFiles = useCallback((incoming: File[]) => {
+    if (!incoming.length) return;
+    setItems(prev => {
+      const next = [...prev];
+      for (const f of incoming) {
+        if (!f.type.startsWith("image/")) continue;
+        const MAX_EACH_MB = 25;
+        if (f.size > MAX_EACH_MB * 1024 * 1024) {
+          toast.error(`${f.name}: ${t("fileTooLarge") || "file too large"}`);
+          continue;
         }
-        return next;
-      });
-
-      // allow picking the same files again
-      if (fileRef.current) fileRef.current.value = "";
-    },
-    [t]
-  );
+        const id = `${f.name}-${f.size}-${f.lastModified}-${uuidv4()}`;
+        next.push({ id, file: f, url: URL.createObjectURL(f) });
+      }
+      return next;
+    });
+    if (fileRef.current) fileRef.current.value = "";
+  }, [t]);
 
   const onFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     appendFiles(Array.from(e.target.files ?? []));
@@ -114,48 +97,34 @@ export default function UploadForm() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  // Clean up object URLs on unmount
   useEffect(() => {
-    return () => {
-      items.forEach(x => URL.revokeObjectURL(x.url));
-    };
+    return () => { items.forEach(x => URL.revokeObjectURL(x.url)); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- uploader (FormData, no Base64) ----------
-  /**
-   * Sends one batch via FormData. No Base64, raw File blobs only.
-   */
-  async function uploadBatchFormData(batch: Item[], subfolderName: string, signal?: AbortSignal) {
+  // Sends one batch via FormData (no Base64)
+  async function uploadBatchFormData(batch: Item[], subfolderName: string/*, signal?: AbortSignal*/) {
     const fd = new FormData();
     if (subfolderName.trim()) fd.append("subfolderName", subfolderName.trim());
-
-    // Append files
-    for (const it of batch) {
-      // keep original filename; backend uses field "files"
-      fd.append("files", it.file, it.file.name);
-    }
+    for (const it of batch) fd.append("files", it.file, it.file.name);
 
     const data = await fetchJSON(UPLOAD_ENDPOINT, {
       method: "POST",
       body: fd,
-      signal,
-      // NOTE: do NOT set Content-Type; the browser sets proper multipart boundary
-      retries: 1, // we already batch; 1 retry is enough
+      // signal,  // ⭐ removed to avoid AbortError races
+      retries: 1,
     });
+
+    // ⭐ Log the server response for this batch (useful while debugging)
+    // console.log("Batch uploaded:", data);
 
     if (!data?.ok) throw new Error(data?.error || "Upload failed");
     return data;
   }
 
-  /**
-   * Batch strategy:
-   * - Keep under ~30MB per request to play nice with proxies.
-   * - Hard cap on items per batch (e.g., 8–10) to avoid long single calls on mobile.
-   */
+  // Size-aware batching
   async function uploadFormDataBatched(all: Item[], subfolderName: string) {
-    // compute batches by total size and count
-    const MAX_BATCH_BYTES = 30 * 1024 * 1024; // ~30MB per request
+    const MAX_BATCH_BYTES = 30 * 1024 * 1024;
     const MAX_BATCH_COUNT = 8;
 
     const batches: Item[][] = [];
@@ -179,22 +148,19 @@ export default function UploadForm() {
     setProgress({ done: 0, total: all.length });
     let uploaded = 0;
 
-    const controller = new AbortController();
+    // ⭐ removed AbortController; it’s not needed and can cause false errors at the end
     try {
       for (const batch of batches) {
-        await uploadBatchFormData(batch, subfolderName, controller.signal);
+        await uploadBatchFormData(batch, subfolderName);
         uploaded += batch.length;
         setProgress({ done: uploaded, total: all.length });
-        // give the UI a tick (prevents jank on low-end phones)
         await new Promise(r => setTimeout(r, 0));
       }
     } finally {
       setProgress(null);
-      controller.abort();
     }
   }
 
-  // ---------- submit ----------
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || items.length === 0) {
@@ -212,15 +178,16 @@ export default function UploadForm() {
       setSuccess(true);
       setName("");
       clearAll();
+      // ⭐ optional UX: toast.success
+      // toast.success(t("uploadComplete") || "Upload complete");
     } catch (err: any) {
-      console.error(err);
+      console.error("[UPLOAD ERROR]", err);
       toast.error(err?.message || "Upload failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ---------- UI ----------
   return success ? (
     <div className="max-w-xl mx-auto text-center rounded-2xl p-6 sm:p-8">
       <div className="font-heading text-2xl sm:text-3xl text-rose-500 mb-2">{t("thanksTitle")}</div>
@@ -235,14 +202,9 @@ export default function UploadForm() {
         </div>
       </section>
 
-      <form
-        onSubmit={submit}
-        className="max-w-xl mx-auto rounded-2xl shadow-sm p-6 sm:p-8 flex flex-col gap-6 bg-white border border-rose/20"
-      >
+      <form onSubmit={submit} className="max-w-xl mx-auto rounded-2xl shadow-sm p-6 sm:p-8 flex flex-col gap-6 bg-white border border-rose/20">
         <div>
-          <label className="block font-body text-sm mb-2 text-ink/80" htmlFor="guest-name">
-            {t("yourName")}
-          </label>
+          <label className="block font-body text-sm mb-2 text-ink/80" htmlFor="guest-name">{t("yourName")}</label>
           <input
             id="guest-name"
             className="w-full font-body rounded-xl border border-rose/30 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-soft bg-off"
@@ -253,24 +215,17 @@ export default function UploadForm() {
         </div>
 
         <div dir={lang.startsWith("ar") ? "rtl" : "ltr"} className="w-full">
-          <label
-            htmlFor="photos"
-            className={`block font-body text-sm mb-2 text-ink/80 ${lang.startsWith("ar") ? "text-right" : "text-left"}`}
-          >
+          <label htmlFor="photos" className={`block font-body text-sm mb-2 text-ink/80 ${lang.startsWith("ar") ? "text-right" : "text-left"}`}>
             {t("uploadPhotos")} <span className="text-ink/50">({t("multipleAllowed")})</span>
           </label>
 
-          {/* Dropzone */}
           <div
-            role="button"
-            tabIndex={0}
+            role="button" tabIndex={0}
             onClick={() => fileRef.current?.click()}
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
-            className="group w-full rounded-2xl border border-dashed border-rose/40 bg-off px-5 py-8
-                       hover:border-rose/70 hover:bg-rose/5 transition-colors cursor-pointer
-                       focus:outline-none focus:ring-2 focus:ring-rose/50"
+            className="group w-full rounded-2xl border border-dashed border-rose/40 bg-off px-5 py-8 hover:border-rose/70 hover:bg-rose/5 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose/50"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center justify-start gap-3">
@@ -282,14 +237,11 @@ export default function UploadForm() {
                   <div className="font-body text-[15px] text-ink">
                     {t("dragDrop")} <span className="text-rose">{t("browse")}</span>
                   </div>
-                  <div className="font-body text-[12px] text-ink/60">
-                    {t("imagesHint")}
-                  </div>
+                  <div className="font-body text-[12px] text-ink/60">{t("imagesHint")}</div>
                 </div>
               </div>
             </div>
 
-            {/* Hidden input (native picker) */}
             <input
               ref={fileRef}
               id="photos"
@@ -301,29 +253,21 @@ export default function UploadForm() {
             />
           </div>
 
-          {/* Selected count */}
           <div aria-live="polite" className="font-body mt-3 text-xs text-ink/70">
-            {!!items.length && (
-              <>
-                {lang.startsWith("ar")
-                  ? `${items.length} ${t("imagesSelected_ar")}`
-                  : `${items.length} ${t("imagesSelected_en")}`}
-              </>
-            )}
+            {!!items.length && (lang.startsWith("ar")
+              ? `${items.length} ${t("imagesSelected_ar")}`
+              : `${items.length} ${t("imagesSelected_en")}`)}
           </div>
 
-          {/* Thumbnails */}
           {!!items.length && (
             <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {items.map((it) => (
+              {items.map(it => (
                 <div key={it.id} className="relative group rounded-xl overflow-hidden bg-off border border-ink/10">
                   <img src={it.url} alt={it.file.name} className="h-28 w-full object-cover" loading="lazy" />
                   <button
                     type="button"
                     onClick={() => removeOne(it.id)}
-                    className="absolute top-2 z-[1] rounded-full border border-ink/10
-                               bg-white/80 backdrop-blur px-2 py-0.5 text-[11px] font-body
-                               text-ink/80 hover:bg-white"
+                    className="absolute top-2 z-[1] rounded-full border border-ink/10 bg-white/80 backdrop-blur px-2 py-0.5 text-[11px] font-body text-ink/80 hover:bg-white"
                     style={lang.startsWith("ar") ? { left: 8 } : { right: 8 }}
                   >
                     {t("remove")}
@@ -333,14 +277,9 @@ export default function UploadForm() {
             </div>
           )}
 
-          {/* Clear all */}
           {!!items.length && (
             <div className={`mt-2 ${lang.startsWith("ar") ? "text-left" : "text-right"}`}>
-              <button
-                type="button"
-                onClick={clearAll}
-                className="font-body text-xs underline underline-offset-2"
-              >
+              <button type="button" onClick={clearAll} className="font-body text-xs underline underline-offset-2">
                 {t("clearAll")}
               </button>
             </div>
@@ -353,9 +292,7 @@ export default function UploadForm() {
           style={{ background: "var(--rose)" }}
           disabled={submitting}
         >
-          {progress
-            ? `${t("uploading") || "Uploading"} ${progress.done}/${progress.total}`
-            : t("submit")}
+          {progress ? `${t("uploading") || "Uploading"} ${progress.done}/${progress.total}` : t("submit")}
         </button>
 
         <HeartLoader visible={submitting} />
