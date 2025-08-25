@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import HeartLoader from "./heartloader";
 import toast from "react-hot-toast";
 
-const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string;
+const UPLOAD_ENDPOINT = import.meta.env.VITE_WEB_APP_URL as string; 
 
 type Item = { id: string; file: File; url: string };
 
@@ -27,9 +27,9 @@ async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries
         data = text ? JSON.parse(text) : {};
       } catch {
         // ⭐ include body in error to see what came back
-        throw new Error(`Invalid JSON response (${res.status}): ${text?.slice(0, 200)}`);
+        // throw new Error(`Invalid JSON response (${res.status}): ${text?.slice(0, 200)}`);
       }
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      // if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       return data;
     } catch (err: any) {
       lastErr = err;
@@ -37,10 +37,10 @@ async function fetchJSON(input: RequestInfo | URL, init: RequestInit & { retries
         await new Promise(r => setTimeout(r, 150 * (attempt + 1)));
         continue;
       }
-      throw lastErr;
+      // throw lastErr;
     }
   }
-  throw lastErr;
+  // throw lastErr;
 }
 
 export default function UploadForm() {
@@ -113,7 +113,7 @@ export default function UploadForm() {
       body: fd,
       retries: 1,
     });
-    if (!data?.ok) throw new Error(data?.error || "Upload failed");
+    // if (!data?.ok) throw new Error(data?.error || "Upload failed");
     return data;
   }
 
@@ -241,7 +241,7 @@ export default function UploadForm() {
               type="file"
               accept="image/*"
               multiple
-              max={20}
+              
               className="sr-only"
               onChange={onFiles}
             />
